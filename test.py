@@ -38,8 +38,8 @@ for val in cleaned_answer_text:
 
 train_answer, test_answer, training_score, test_score = train_test_split(updated_text, score, test_size=0.2)
 
-vocab_size = 1000 #?
-embedding_dimension = 16 # ?
+vocab_size = 400000 #?
+embedding_dimension = 100 # ?
 max_length = 100  #?
 padding_type = 'post' #post and same
 trunc_type = 'post' #post
@@ -57,14 +57,18 @@ data = pad_sequences(sequences, maxlen = max_length, padding = padding_type, tru
 testing_sequences= tokenizer.texts_to_sequences(test_answer)
 testing_padded=pad_sequences(testing_sequences,maxlen=max_length,padding=padding_type,truncating=trunc_type)
 
-# embeddings = {}
-# f= open('glove.6B.100d.txt')
-# for line in f:
-#     word, coefs = line.split(maxsplit=1)
-#     coefs = np.fromstring(coefs, "f", sep=" ")
-#     embeddings[word] = coefs
-# f.close()
-#
+embeddingsDict = {}
+f= open('glove.6B.100d.txt')
+for line in f:
+    value = line.split()
+    word = value[0]
+    vector= np.asarray(value[1:],"float32")
+    embeddingsDict[word] = vector
+f.close()
+
+embeddingsMatrix = np.array([embeddingsDict[i] for i in embeddingsDict.keys()] )
+
+# #
 # hits = 0
 # misses = 0
 # num_tokens = vocab_size + 2
@@ -79,10 +83,9 @@ testing_padded=pad_sequences(testing_sequences,maxlen=max_length,padding=padding
 #     else:
 #         misses+=1
 
+
 model = tf.keras.Sequential([
-tf.keras.layers.Embedding(input_dim = vocab_size, output_dim = embedding_dimension,input_length=max_length),
-#mask_zero=True,embeddings_initializer=keras.initializers.Constant(embedding_matrix)
-# ),
+tf.keras.layers.Embedding(input_dim = vocab_size, output_dim = embedding_dimension,input_length=max_length, mask_zero=True,embeddings_initializer=keras.initializers.Constant(embeddingsMatrix)),
 # tf.keras.layers.LSTM()
 tf.keras.layers.Flatten(),
 tf.keras.layers.Dense(5,activation='sigmoid'), #todo activation
@@ -92,6 +95,4 @@ tf.keras.layers.Dense(5,activation='sigmoid'), #todo activation
 # loss_fn = keras.losses.CategoricalCrossentropy()
 model.compile(loss='SparseCategoricalCrossentropy',optimizer='adam', metrics=['accuracy'])
 model.summary()
-
-
 model.fit(np.array(data), np.array(training_score),batch_size=128,epochs=50,validation_data=(np.array(testing_padded),np.array(test_score)))
