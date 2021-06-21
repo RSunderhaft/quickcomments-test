@@ -13,6 +13,7 @@ from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers import CuDNNLSTM
 
+#======================preprocessing========================
 df= pd.read_csv("1_bert_full_connected_responses.csv")
 #removed nan values
 df.dropna(subset = ["cleaned_answer_text"],inplace = True)
@@ -27,6 +28,9 @@ for val in cleaned_answer_text:
     filtered_sentence = [w.lower() for w in word_tokens if not w.lower() in stop_words]
     cleaned_text = cleaned_text.join(filtered_sentence)
     updated_text.append(cleaned_text)
+
+#========tokenize
+
 train_answer, test_answer, training_score, test_score = train_test_split(updated_text, score, test_size=0.2)
 vocab_size = 100 #113289
 embedding_dimension = 768 #1024
@@ -45,32 +49,29 @@ testing_sequences= tokenizer.texts_to_sequences(test_answer)
 testing_padded=pad_sequences(testing_sequences,maxlen=max_length,padding=padding_type,truncating=trunc_type)
 
 #embeddings...
-model = SentenceTransformer('paraphrase-distilroberta-base-v1')
+# model = SentenceTransformer('paraphrase-distilroberta-base-v1')
+model = SentenceTransformer('bert-base-nli-mean-tokens')
 # model = SentenceTransformer('stsb-bert-large')
 sentences = train_answer[0:100]
 sentence_embeddings = model.encode(sentences)
-#print(sentence_embeddings.shape)
+print(sentence_embeddings.shape)
+
+
+#model setup
 callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)
 model = tf.keras.Sequential([
-# tf.keras.layers.Embedding(input_dim = vocab_size, output_dim = embedding_dimension,input_length=max_length, mask_zero=True, embeddings_initializer= keras.initializers.Constant(sentence_embeddings)),
-#tf.keras.layers.Embedding(input_dim = vocab_size, output_dim = embedding_dimension, input_length=max_length, weights=[sentence_embeddings],trainable=False),
-tf.keras.layers.Embedding(input_dim = vocab_size, output_dim = embedding_dimension, input_length=max_length),
-# tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(embedding_dimension)),
-tf.keras.layers.Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(64,return_sequences=True)),
-tf.keras.layers.Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(32)),
-# tf.keras.layers.Bidirectional(tf.keras.layers.GRU(embedding_dimension)),
-# tf.keras.layers.GlobalAveragePooling1D(),
+tf.keras.layers.Embedding(input_dim = vocab_size, output_dim = embedding_dimension, input_length=max_length, weights=[sentence_embeddings],trainable=True),
+tf.keras.layers.SpatialDropout1D(0.2),
+tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64,return_sequences=True)),
+tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(32)),
 tf.keras.layers.Dropout(0.25),
-# tf.keras.layers.Flatten(),
-#kernel_regularizer='l2'
 tf.keras.layers.Dense(5,activation='softmax'),
 ])
-
+#
 #adamax, nadam, adam
 opt = keras.optimizers.Adamax(learning_rate = 0.0001)
-model.compile(loss='SparseCategoricalCrossentropy',optimizer=opt, metrics=[tf.keras.metrics.RootMeanSquaredError()])
+model.compile(loss='SparseCategoricalCrossentropy',optimizer=opt, metrics=['accuracy'])
 #RMSE..
 # model.compile(loss='mse',optimizer='sgd', metrics=[tf.keras.metrics.RootMeanSquaredError()])
 model.summary()
-
 model.fit(np.array(data), np.array(training_score),batch_size=128,epochs=25,validation_data=(np.array(testing_padded),np.array(test_score)), callbacks=[callback])
