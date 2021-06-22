@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -22,5 +21,16 @@ sims_of_sentence = (sims_of_sentence[0]).tolist()
 max_sim = max(sims_of_sentence)
 index_of_max = sims_of_sentence.index(max_sim)
 
-print("score input sentence: " + str(scores[99]) + "\nsentence: " + str(sentences[99]))
+strTest = "This can't be the answer since the ramp is low" #Randomly generated test answer
+test = model.encode(strTest)
+
+sims_of_sentence = cosine_similarity([test], sentence_vecs[:])
+
+sims_of_sentence = test.tolist()
+max_sim = max(sims_of_sentence)
+index_of_max = sims_of_sentence.index(max_sim)
+
+print(type(test))
+
+print("score input sentence: ?" + "\nsentence: " + strTest)
 print("score output sentence: " + str(scores[index_of_max]) + "\nsentence: " + str(sentences[index_of_max]))
