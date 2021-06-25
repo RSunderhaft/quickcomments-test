@@ -12,8 +12,51 @@ from tensorflow.keras.initializers import Constant
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers import CuDNNLSTM
+import csv
 
 #======================preprocessing========================
+# file = open("1_bert_full_connected_responses.csv",encoding="utf-8")
+# fileReader = csv.reader(file)
+# print(len(list(fileReader)))
+def encoding(scores):
+    encodedList = []
+
+    for single_score in range(len(scores)):
+        list = [0,0,0,0,0]
+        list[scores[single_score]] = 1
+        encodedList.append(list)
+    # print(encodedList)
+    return encodedList
+
+
+
+def rmse(actual, predicted, average_over_labels=True):
+    assert len(actual) == len(predicted)
+
+    ac = np.array(actual, dtype=np.float32).reshape((len(actual), -1))
+    pr = np.array(predicted, dtype=np.float32).reshape((len(predicted), -1))
+
+    na = np.argwhere([not np.any(np.isnan(i)) for i in ac]).ravel()
+
+    if len(na) == 0:
+        return np.nan
+
+    ac = ac[na]
+    pr = pr[na]
+
+    label_rmse = []
+    for i in range(ac.shape[-1]):
+        dif = np.array(ac[:, i]) - np.array(pr[:, i])
+        sqdif = dif**2
+        mse = np.nanmean(sqdif)
+        label_rmse.append(np.sqrt(mse))
+
+
+    if average_over_labels:
+        return np.nanmean(label_rmse)
+    else:
+        return label_rmse
+
 df= pd.read_csv("1_bert_full_connected_responses.csv")
 #removed nan values
 df.dropna(subset = ["cleaned_answer_text"],inplace = True)
@@ -21,7 +64,7 @@ score = df['score'].tolist()
 cleaned_answer_text = df['cleaned_answer_text'].tolist()
 stop_words = set(stopwords.words('english'))
 updated_text = []
-# remove stop words
+# remove stop words -- delete??
 for val in cleaned_answer_text:
     cleaned_text = ' '
     word_tokens = word_tokenize(val)
@@ -32,8 +75,9 @@ for val in cleaned_answer_text:
 #========tokenize
 
 train_answer, test_answer, training_score, test_score = train_test_split(updated_text, score, test_size=0.2)
-vocab_size = 100 #113289
-embedding_dimension = 768 #1024
+vocab_size = 100#113289
+#150448
+embedding_dimension = 1024
 max_length = 50
 padding_type = 'post'
 trunc_type = 'post'
@@ -50,8 +94,8 @@ testing_padded=pad_sequences(testing_sequences,maxlen=max_length,padding=padding
 
 #embeddings...
 # model = SentenceTransformer('paraphrase-distilroberta-base-v1')
-model = SentenceTransformer('bert-base-nli-mean-tokens')
-# model = SentenceTransformer('stsb-bert-large')
+# model = SentenceTransformer('bert-base-nli-mean-tokens')
+model = SentenceTransformer('stsb-bert-large')
 sentences = train_answer[0:100]
 sentence_embeddings = model.encode(sentences)
 print(sentence_embeddings.shape)
@@ -70,8 +114,14 @@ tf.keras.layers.Dense(5,activation='softmax'),
 #
 #adamax, nadam, adam
 opt = keras.optimizers.Adamax(learning_rate = 0.0001)
+# model.compile(loss=MyLoss_Layer(),optimizer=opt, metrics=['accuracy'])
 model.compile(loss='SparseCategoricalCrossentropy',optimizer=opt, metrics=['accuracy'])
 #RMSE..
 # model.compile(loss='mse',optimizer='sgd', metrics=[tf.keras.metrics.RootMeanSquaredError()])
 model.summary()
-model.fit(np.array(data), np.array(training_score),batch_size=128,epochs=25,validation_data=(np.array(testing_padded),np.array(test_score)), callbacks=[callback])
+model.fit(np.array(data), np.array(training_score),batch_size=128,epochs=1,validation_data=(np.array(testing_padded),np.array(test_score)), callbacks=[callback])
+# print((model.predict(data) > 0.5).astype("int32"))
+predictions = (model.predict(data) > 0.5).astype("int32")
+encodingArr = encoding(training_score)
+print(rmse(encodingArr,predictions))
+# model.save("LSTM_TEST")
